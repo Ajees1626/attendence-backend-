@@ -1,24 +1,18 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from db_config import init_mysql
+from db import get_connection
 from datetime import datetime
+from dotenv import load_dotenv
 import bcrypt
 import random
 import string
+import os
 
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
-
-
-# Database config
-app.config["MYSQL_HOST"] = "localhost"
-app.config["MYSQL_USER"] = "root"
-app.config["MYSQL_PASSWORD"] = ""
-app.config["MYSQL_DB"] = "staffdb"
-
-mysql = init_mysql(app)
-
+ 
 # Generate random password
 def generate_password(length=6):
     return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
@@ -31,7 +25,8 @@ def login():
     email = data.get('email')
     password = data.get('password')
 
-    cur = mysql.connection.cursor()
+    conn = get_connection()
+    cur = conn.cursor(dictionary=True)
     cur.execute("SELECT * FROM users WHERE email=%s", (email,))
     user = cur.fetchone()
     if user and bcrypt.checkpw(password.encode(), user['password'].encode()):
