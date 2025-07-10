@@ -12,7 +12,11 @@ import psycopg2.extras
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, supports_credentials=True, origins=[
+    "https://attendence-backend-ewp8.onrender.com",                         # local dev
+    "ephemeral-jalebi-66afe3.netlify.app"       # production domain
+])
+
 
 def generate_password(length=6):
     return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
