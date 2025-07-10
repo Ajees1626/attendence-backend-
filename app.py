@@ -250,5 +250,14 @@ def salary_report():
         "total_spent": total_spent
     })
 
+@app.route("/test")
+def test():
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM users")
+    data = cursor.fetchall()
+    return jsonify(data)
+
+
 if __name__ == "__main__":
     app.run(debug=True)
