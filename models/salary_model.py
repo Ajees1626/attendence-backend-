@@ -1,21 +1,20 @@
-# salary_model.py
-
 from db import get_connection
 from calendar import monthrange
+import psycopg2.extras
 
-# Salary rules (can be customized per user in future)
+# Salary rules
 SALARY_PER_DAY = 1000
 PAID_LEAVE_DAYS = 1
 PERMISSION_MINUTES = 120
 LATE_CUT_PERCENT = 20
 EARLY_CUT_PERCENT = 20
-BONUS_DAY_PAY = 1  # if perfect attendance
+BONUS_DAY_PAY = 1  # one-day bonus if perfect attendance
 
 def calculate_salary_for_user(user_id, year, month):
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
-    # Get number of days in the month
+    # Get total days in month
     days_in_month = monthrange(year, month)[1]
     start_date = f"{year}-{month:02d}-01"
     end_date = f"{year}-{month:02d}-{days_in_month:02d}"
@@ -27,7 +26,7 @@ def calculate_salary_for_user(user_id, year, month):
     """, (user_id, start_date, end_date))
     records = cursor.fetchall()
 
-    # Initialize counters
+    # Initialize
     present_days = 0
     paid_leave = 0
     permission_used = 0
@@ -37,38 +36,34 @@ def calculate_salary_for_user(user_id, year, month):
 
     for rec in records:
         present_days += 1
-
         if rec.get("is_paid_leave"):
             paid_leave += 1
-
         if rec.get("permission_used"):
             permission_used += 1
-
         if rec.get("late_minutes", 0) > 10:
             late_deduct += SALARY_PER_DAY * (LATE_CUT_PERCENT / 100)
-
         if rec.get("early_minutes", 0) > 10:
             early_deduct += SALARY_PER_DAY * (EARLY_CUT_PERCENT / 100)
 
     total_base_salary = present_days * SALARY_PER_DAY
 
-    # Unpaid Leave Deduction
+    # Unpaid leave deduction
     unpaid_leaves = max(0, paid_leave - PAID_LEAVE_DAYS)
     unpaid_leave_deduct = unpaid_leaves * SALARY_PER_DAY
 
-    # Permission Deduction
+    # Permission deduction
     total_permission_minutes = permission_used * 60
     excess_permission = max(0, total_permission_minutes - PERMISSION_MINUTES)
     permission_deduct = (excess_permission / 60) * SALARY_PER_DAY
 
-    # Bonus Calculation
+    # Bonus logic
     if present_days == days_in_month and paid_leave == 0 and permission_used == 0:
         bonus = SALARY_PER_DAY * BONUS_DAY_PAY
 
     total_deductions = late_deduct + early_deduct + unpaid_leave_deduct + permission_deduct
     final_salary = total_base_salary - total_deductions + bonus
 
-    # Insert or Update salary table
+    # Insert or update (PostgreSQL-specific UPSERT using ON CONFLICT)
     cursor.execute("""
         INSERT INTO salary (
             user_id, month, year, total_days, total_present,
@@ -76,16 +71,16 @@ def calculate_salary_for_user(user_id, year, month):
             early_deductions, total_deductions, total_additions, final_salary
         )
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        ON DUPLICATE KEY UPDATE
-            total_days = VALUES(total_days),
-            total_present = VALUES(total_present),
-            paid_leave = VALUES(paid_leave),
-            permissions_used = VALUES(permissions_used),
-            late_deductions = VALUES(late_deductions),
-            early_deductions = VALUES(early_deductions),
-            total_deductions = VALUES(total_deductions),
-            total_additions = VALUES(total_additions),
-            final_salary = VALUES(final_salary)
+        ON CONFLICT (user_id, month, year) DO UPDATE SET
+            total_days = EXCLUDED.total_days,
+            total_present = EXCLUDED.total_present,
+            paid_leave = EXCLUDED.paid_leave,
+            permissions_used = EXCLUDED.permissions_used,
+            late_deductions = EXCLUDED.late_deductions,
+            early_deductions = EXCLUDED.early_deductions,
+            total_deductions = EXCLUDED.total_deductions,
+            total_additions = EXCLUDED.total_additions,
+            final_salary = EXCLUDED.final_salary
     """, (
         user_id, month, year, days_in_month, present_days, paid_leave,
         permission_used, late_deduct, early_deduct,

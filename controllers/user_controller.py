@@ -1,7 +1,7 @@
-# user_controller.py
 from flask import Blueprint, request, jsonify
 from db import get_connection
 from datetime import datetime, date, time
+import psycopg2.extras
 import bcrypt
 
 user_bp = Blueprint("user", __name__)
@@ -16,7 +16,7 @@ def login():
     password = data.get("password")
 
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
     user = cursor.fetchone()
     conn.close()
@@ -33,13 +33,14 @@ def login():
         })
     return jsonify({"success": False, "message": "Invalid credentials"}), 401
 
+
 # -----------------------
 # 👤 Get Profile
 # -----------------------
 @user_bp.route("/profile/<int:user_id>", methods=["GET"])
 def get_profile(user_id):
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cursor.execute("SELECT id, name, email, phone, age, batch, role FROM users WHERE id = %s", (user_id,))
     user = cursor.fetchone()
     conn.close()
@@ -48,13 +49,14 @@ def get_profile(user_id):
         return jsonify(user)
     return jsonify({"error": "User not found"}), 404
 
+
 # -----------------------
 # ✅ Attendance Log
 # -----------------------
 @user_bp.route("/attendance/<int:user_id>", methods=["GET"])
 def get_attendance(user_id):
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cursor.execute("""
         SELECT date, check_in, check_out, late_minutes, early_minutes, is_present, is_paid_leave
         FROM attendance
@@ -66,13 +68,14 @@ def get_attendance(user_id):
 
     return jsonify(logs)
 
+
 # -----------------------
 # 💰 Latest Salary
 # -----------------------
 @user_bp.route("/salary/<int:user_id>", methods=["GET"])
 def get_salary(user_id):
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cursor.execute("""
         SELECT * FROM salary
         WHERE user_id = %s
@@ -86,6 +89,7 @@ def get_salary(user_id):
         return jsonify(salary)
     return jsonify({"error": "No salary record found"}), 404
 
+
 # -----------------------
 # ⏱️ Check-In
 # -----------------------
@@ -98,12 +102,12 @@ def check_in():
     check_in_time = now.time()
 
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cursor.execute("SELECT * FROM attendance WHERE user_id = %s AND date = %s", (user_id, today))
     if cursor.fetchone():
+        conn.close()
         return jsonify({"message": "Already checked in"}), 400
 
-    # Late logic
     late_limit = time(9, 40)
     late_minutes = 0
     if check_in_time > late_limit:
@@ -118,6 +122,7 @@ def check_in():
     conn.close()
     return jsonify({"message": "Checked in", "late_minutes": late_minutes})
 
+
 # -----------------------
 # ⏳ Check-Out
 # -----------------------
@@ -130,13 +135,15 @@ def check_out():
     check_out_time = now.time()
 
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cursor.execute("SELECT * FROM attendance WHERE user_id = %s AND date = %s", (user_id, today))
     record = cursor.fetchone()
 
     if not record:
+        conn.close()
         return jsonify({"message": "Check-in first"}), 400
     if record["check_out"]:
+        conn.close()
         return jsonify({"message": "Already checked out"}), 400
 
     early_limit = time(17, 50)

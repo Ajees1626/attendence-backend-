@@ -12,7 +12,10 @@ def login():
     password = data.get("password")
 
     if not email or not password:
-        return jsonify({"success": False, "message": "Email and password are required"}), 400
+        return jsonify({
+            "success": False,
+            "message": "Email and password are required"
+        }), 400
 
     user = get_user_by_email(email)
 
@@ -28,4 +31,8 @@ def login():
             }
         })
     else:
-        return jsonify({"success": False, "message": "Invalid credentials"}), 401
+        return jsonify({
+            "success": False,
+            "message": "Invalid credentials"
+        }), 401
+

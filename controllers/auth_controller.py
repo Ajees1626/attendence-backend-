@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from db import get_connection
 import bcrypt
+import psycopg2.extras
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -11,7 +12,8 @@ def login():
     password = data.get("password")
 
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
     cursor.execute("SELECT * FROM users WHERE email = %s", (username,))
     user = cursor.fetchone()
     conn.close()

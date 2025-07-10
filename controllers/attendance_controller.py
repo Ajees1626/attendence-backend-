@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from db import get_connection
 from datetime import datetime, time
+import psycopg2.extras
 
 attendance_bp = Blueprint('attendance', __name__)
 
@@ -12,7 +13,7 @@ def get_minutes_late(checkin_time):
     if checkin_time <= threshold:
         return 0
     elif checkin_time <= late_limit:
-        return 0  # no deduction
+        return 0  # grace period
     else:
         delta = datetime.combine(datetime.today(), checkin_time) - datetime.combine(datetime.today(), late_limit)
         return delta.seconds // 60  # late minutes
@@ -34,7 +35,7 @@ def check_in():
     check_in_time = now.time()
 
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     # Check if already checked in
     cursor.execute("SELECT * FROM attendance WHERE user_id = %s AND date = %s", (user_id, today))
@@ -65,7 +66,7 @@ def check_out():
     check_out_time = now.time()
 
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     cursor.execute("SELECT * FROM attendance WHERE user_id = %s AND date = %s", (user_id, today))
     row = cursor.fetchone()

@@ -1,10 +1,9 @@
-# attendance_model.py
-
 from db import get_connection
 from datetime import datetime, time
+import psycopg2.extras
 
 
-# Utility: Calculate late minutes
+# Calculate late minutes
 def calculate_late_minutes(check_in_time):
     late_limit = time(9, 40)
     if check_in_time <= late_limit:
@@ -13,7 +12,7 @@ def calculate_late_minutes(check_in_time):
     return delta.seconds // 60
 
 
-# Utility: Calculate early leave minutes
+# Calculate early leave minutes
 def calculate_early_minutes(check_out_time):
     early_limit = time(17, 50)
     if check_out_time >= early_limit:
@@ -22,17 +21,17 @@ def calculate_early_minutes(check_out_time):
     return delta.seconds // 60
 
 
-# ✅ Check if user already checked in
+# Check if user already checked in today
 def is_already_checked_in(user_id, today):
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cursor.execute("SELECT * FROM attendance WHERE user_id = %s AND date = %s", (user_id, today))
     result = cursor.fetchone()
     conn.close()
     return result
 
 
-# ✅ Check-in logic
+# Perform check-in
 def perform_check_in(user_id):
     now = datetime.now()
     today = now.date()
@@ -40,7 +39,7 @@ def perform_check_in(user_id):
     late_minutes = calculate_late_minutes(check_in_time)
 
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor()
     cursor.execute("""
         INSERT INTO attendance (user_id, date, check_in, late_minutes, is_present)
         VALUES (%s, %s, %s, %s, %s)
@@ -54,7 +53,7 @@ def perform_check_in(user_id):
     }
 
 
-# ✅ Check-out logic
+# Perform check-out
 def perform_check_out(user_id):
     now = datetime.now()
     today = now.date()
@@ -62,9 +61,9 @@ def perform_check_out(user_id):
     early_minutes = calculate_early_minutes(check_out_time)
 
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
-    # Fetch existing record
+    # Fetch check-in record
     cursor.execute("SELECT * FROM attendance WHERE user_id = %s AND date = %s", (user_id, today))
     record = cursor.fetchone()
 
@@ -90,10 +89,10 @@ def perform_check_out(user_id):
     }
 
 
-# 📜 Get full attendance log
+# Get full attendance log
 def get_attendance_log(user_id):
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cursor.execute("""
         SELECT date, check_in, check_out, late_minutes, early_minutes, is_present, is_paid_leave
         FROM attendance
