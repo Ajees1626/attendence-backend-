@@ -17,34 +17,23 @@ CORS(app)
 def generate_password(length=6):
     return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
 
-@auth_bp.route("/login", methods=["POST"])
+@app.route('/api/login', methods=['POST'])
 def login():
     data = request.get_json()
-    email = data.get("email")
-    password = data.get("password")
-
-    if not email or not password:
-        return jsonify({"success": False, "message": "Email and password are required"}), 400
+    email = data.get('email')
+    password = data.get('password')
 
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT id, name, email, role, image, password FROM users WHERE email = %s", (email,))
-    user = cursor.fetchone()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT * FROM users WHERE email=%s", (email,))
+    user = cur.fetchone()
+    cur.close()
     conn.close()
 
-    if user and bcrypt.checkpw(password.encode(), user["password"].encode()):
-        return jsonify({
-            "success": True,
-            "user": {
-                "id": user["id"],
-                "name": user["name"],
-                "email": user["email"],
-                "role": user["role"],
-                "image": user.get("image")  # 👈 includes image
-            }
-        })
-    return jsonify({"success": False, "message": "Invalid credentials"}), 401
-
+    if user and bcrypt.checkpw(password.encode(), user['password'].encode()):
+        return jsonify({"status": "success", "user": user})
+    else:
+        return jsonify({"status": "fail", "message": "Invalid credentials"}), 401
 
 @app.route('/api/add-staff', methods=['POST'])
 def add_staff():
@@ -264,6 +253,7 @@ def test():
     cur.close()
     conn.close()
     return jsonify(data)
+
 
 if __name__ == "__main__":
     app.run(debug=True)
